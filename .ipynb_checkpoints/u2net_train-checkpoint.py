@@ -2,9 +2,7 @@ import torch
 import torchvision
 from torch.autograd import Variable
 import torch.nn as nn
-import os
 import torch.nn.functional as F
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
@@ -13,7 +11,7 @@ import torchvision.transforms as standard_transforms
 
 import numpy as np
 import glob
-
+import os
 from data_loader import Rescale
 from data_loader import RescaleT
 from data_loader import RandomCrop
@@ -24,45 +22,41 @@ from data_loader import SalObjDataset
 from model import U2NET
 from model import U2NETP
 
-from model import UPSPNet
-import matplotlib.pyplot as plt
-import eval
-
 # ------- 1. define loss function --------
 
 bce_loss = nn.BCELoss(size_average=True)
 
 def muti_bce_loss_fusion(d0, d1, d2, d3, d4, d5, d6, labels_v):
 
-    loss0 = bce_loss(d0,labels_v)
-    loss1 = bce_loss(d1,labels_v)
-    loss2 = bce_loss(d2,labels_v)
-    loss3 = bce_loss(d3,labels_v)
-    loss4 = bce_loss(d4,labels_v)
-    loss5 = bce_loss(d5,labels_v)
-    loss6 = bce_loss(d6,labels_v)
+	loss0 = bce_loss(d0,labels_v)
+	loss1 = bce_loss(d1,labels_v)
+	loss2 = bce_loss(d2,labels_v)
+	loss3 = bce_loss(d3,labels_v)
+	loss4 = bce_loss(d4,labels_v)
+	loss5 = bce_loss(d5,labels_v)
+	loss6 = bce_loss(d6,labels_v)
 
-    loss = loss0 + loss1 + loss2 + loss3 + loss4 + loss5 + loss6
-    print("l0: %3f, l1: %3f, l2: %3f, l3: %3f, l4: %3f, l5: %3f, l6: %3f\n"%(loss0.data,loss1.data,loss2.data,loss3.data,loss4.data,loss5.data,loss6.data))
+	loss = loss0 + loss1 + loss2 + loss3 + loss4 + loss5 + loss6
+	print("l0: %3f, l1: %3f, l2: %3f, l3: %3f, l4: %3f, l5: %3f, l6: %3f\n"%(loss0.data[0],loss1.data[0],loss2.data[0],loss3.data[0],loss4.data[0],loss5.data[0],loss6.data[0]))
 
-    return loss0, loss
+	return loss0, loss
 
 
 # ------- 2. set the directory of training dataset --------
 
-model_name = 'upspnet' #'u2netp'
+model_name = 'u2net' #'u2netp'
 
-data_dir = os.path.join(os.getcwd(), '/home/featurize/data/DATA/Train' + os.sep)
-tra_image_dir = os.path.join('src' + os.sep)
+data_dir = os.path.join(os.getcwd(), 'train_data' + os.sep)
+tra_image_dir = os.path.join('source' + os.sep)
 tra_label_dir = os.path.join('gt' + os.sep)
 
 image_ext = '.jpg'
 label_ext = '.png'
 
-model_dir = os.path.join(os.getcwd(), 'saved_models', "auspnet" + os.sep)
+model_dir = os.path.join(os.getcwd(), 'saved_models', model_name + os.sep)
 
-epoch_num = 200
-batch_size_train = 32
+epoch_num = 10
+batch_size_train = 12
 batch_size_val = 1
 train_num = 0
 val_num = 0
@@ -99,27 +93,25 @@ salobj_dataloader = DataLoader(salobj_dataset, batch_size=batch_size_train, shuf
 
 # ------- 3. define model --------
 # define the net
-
-net = UPSPNet.UPSPNET_RSU(3, 1)
-#net=torch.nn.DataParallel(net)
-#net = nn.DataParallel(net) # multi-GPU
+if(model_name=='u2net'):
+    net = U2NET(3, 1)
+elif(model_name=='u2netp'):
+    net = U2NETP(3,1)
 
 if torch.cuda.is_available():
     net.cuda()
 
 # ------- 4. define optimizer --------
 print("---define optimizer...")
-optimizer = optim.Adam(net.parameters(), lr=0.01, betas=(0.9, 0.999), eps=1e-08, weight_decay=0)
+optimizer = optim.Adam(net.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0)
 
 # ------- 5. training process --------
 print("---start training...")
-
 ite_num = 0
 running_loss = 0.0
 running_tar_loss = 0.0
 ite_num4val = 0
-save_epoch = 5
-Loss_list = []
+save_frq = 2000 # save the model every 2000 iterations
 
 for epoch in range(0, epoch_num):
     net.train()
@@ -144,35 +136,27 @@ for epoch in range(0, epoch_num):
         optimizer.zero_grad()
 
         # forward + backward + optimize
-        d0, d1, d2, d3, d4, d5, d6= net(inputs_v)
-        loss2, loss = muti_bce_loss_fusion(d0, d1, d2, d3, d4,d5, d6, labels_v)
+        d0, d1, d2, d3, d4, d5, d6 = net(inputs_v)
+        loss2, loss = muti_bce_loss_fusion(d0, d1, d2, d3, d4, d5, d6, labels_v)
 
         loss.backward()
         optimizer.step()
 
         # # print statistics
-        running_loss += loss.data
-        running_tar_loss += loss2.data
+        running_loss += loss.data[0]
+        running_tar_loss += loss2.data[0]
 
         # del temporary outputs and loss
-        del d0, d1, d2, d3, d4, loss2, loss
+        del d0, d1, d2, d3, d4, d5, d6, loss2, loss
 
         print("[epoch: %3d/%3d, batch: %5d/%5d, ite: %d] train loss: %3f, tar: %3f " % (
         epoch + 1, epoch_num, (i + 1) * batch_size_train, train_num, ite_num, running_loss / ite_num4val, running_tar_loss / ite_num4val))
 
-
-        if (epoch+1) % save_epoch== 0:
+        if ite_num % save_frq == 0:
 
             torch.save(net.state_dict(), model_dir + model_name+"_bce_itr_%d_train_%3f_tar_%3f.pth" % (ite_num, running_loss / ite_num4val, running_tar_loss / ite_num4val))
-            Loss_list.append(running_loss / ite_num4val)
             running_loss = 0.0
             running_tar_loss = 0.0
             net.train()  # resume train
             ite_num4val = 0
 
-    x = range(0, len(Loss_list))
-    y = Loss_list
-    plt.plot(x, y, '.-')
-    plt.xlabel('Test loss vs. ite_num')
-    plt.ylabel('Test loss')
-    plt.savefig("aug_loss/aug_loss_{}.jpg".format(str(epoch+1)))
