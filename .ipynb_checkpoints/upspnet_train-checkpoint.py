@@ -62,10 +62,17 @@ label_ext = '.png'
 model_dir = os.path.join(os.getcwd(), 'saved_models', "auspnet" + os.sep)
 
 epoch_num = 200
-batch_size_train = 32
+batch_size_train = 12
 batch_size_val = 1
 train_num = 0
 val_num = 0
+
+ite_num = 0
+running_loss = 0.0
+running_tar_loss = 0.0
+ite_num4val = 0
+save_epoch = 5
+Loss_list = []
 
 tra_img_name_list = glob.glob(data_dir + tra_image_dir + '*' + image_ext)
 
@@ -109,17 +116,10 @@ if torch.cuda.is_available():
 
 # ------- 4. define optimizer --------
 print("---define optimizer...")
-optimizer = optim.Adam(net.parameters(), lr=0.01, betas=(0.9, 0.999), eps=1e-08, weight_decay=0)
+optimizer = optim.Adam(net.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0)
 
 # ------- 5. training process --------
 print("---start training...")
-
-ite_num = 0
-running_loss = 0.0
-running_tar_loss = 0.0
-ite_num4val = 0
-save_epoch = 5
-Loss_list = []
 
 for epoch in range(0, epoch_num):
     net.train()
@@ -175,4 +175,4 @@ for epoch in range(0, epoch_num):
     plt.plot(x, y, '.-')
     plt.xlabel('Test loss vs. ite_num')
     plt.ylabel('Test loss')
-    plt.savefig("aug_loss/aug_loss_{}.jpg".format(str(epoch+1)))
+    plt.savefig("loss/loss_{}.jpg".format(str(epoch+1)))
