@@ -25,7 +25,11 @@ from model import U2NET
 from model import U2NETP
 
 from model import UPSPNet
+
+import matplotlib
+matplotlib.use('AGG')
 import matplotlib.pyplot as plt
+
 import eval
 
 # ------- 1. define loss function --------
@@ -52,7 +56,7 @@ def muti_bce_loss_fusion(d0, d1, d2, d3, d4, d5, d6, labels_v):
 
 model_name = 'upspnet' #'u2netp'
 
-data_dir = os.path.join(os.getcwd(), '/home/featurize/data/DATA/Train' + os.sep)
+data_dir = os.path.join(os.getcwd(), '/mnt/DATA/Train' + os.sep)
 tra_image_dir = os.path.join('src' + os.sep)
 tra_label_dir = os.path.join('gt' + os.sep)
 
@@ -61,8 +65,8 @@ label_ext = '.png'
 
 model_dir = os.path.join(os.getcwd(), 'saved_models', "auspnet" + os.sep)
 
-epoch_num = 200
-batch_size_train = 12
+epoch_num = 500
+batch_size_train = 36
 batch_size_val = 1
 train_num = 0
 val_num = 0
@@ -161,18 +165,18 @@ for epoch in range(0, epoch_num):
         epoch + 1, epoch_num, (i + 1) * batch_size_train, train_num, ite_num, running_loss / ite_num4val, running_tar_loss / ite_num4val))
 
 
-        if (epoch+1) % save_epoch== 0:
+    if (epoch+1) % save_epoch== 0:
 
-            torch.save(net.state_dict(), model_dir + model_name+"_bce_itr_%d_train_%3f_tar_%3f.pth" % (ite_num, running_loss / ite_num4val, running_tar_loss / ite_num4val))
-            Loss_list.append(running_loss / ite_num4val)
-            running_loss = 0.0
-            running_tar_loss = 0.0
-            net.train()  # resume train
-            ite_num4val = 0
+        torch.save(net.state_dict(), model_dir + model_name+"_bce_itr_%d_train_%3f_tar_%3f.pth" % (ite_num, running_loss / ite_num4val, running_tar_loss / ite_num4val))
+        Loss_list.append(running_loss / ite_num4val)
+        running_loss = 0.0
+        running_tar_loss = 0.0
+        net.train()  # resume train
+        ite_num4val = 0
 
     x = range(0, len(Loss_list))
     y = Loss_list
     plt.plot(x, y, '.-')
     plt.xlabel('Test loss vs. ite_num')
     plt.ylabel('Test loss')
-    plt.savefig("loss/loss_{}.jpg".format(str(epoch+1)))
+    plt.savefig("loss/loss_{}.png".format(str(epoch+1)))
