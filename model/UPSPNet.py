@@ -767,3 +767,109 @@ class UPSPNET_RSU(nn.Module):
         d0 = self.outconv(torch.cat((d1,d2,d3,d4,d5,d6),1))
 
         return F.sigmoid(d0), F.sigmoid(d1), F.sigmoid(d2), F.sigmoid(d3), F.sigmoid(d4), F.sigmoid(d5), F.sigmoid(d6)
+    
+class UPSPNET_RSU_noSE(nn.Module):
+
+    def __init__(self,in_ch=3,out_ch=1):
+        super(UPSPNET_RSU_noSE,self).__init__()
+
+        self.stage1 = PSPBlock(features=in_ch, out_features=64, sizes=(1, 2, 3, 6))
+        self.pool12 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
+
+        self.stage2 = PSPBlock(features=64, out_features=128, sizes=(1, 2, 3, 6))
+        self.pool23 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
+ 
+        self.stage3 = PSPBlock(features=128, out_features=256, sizes=(1, 2, 3, 6))
+        self.pool34 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
+
+        self.stage4 = PSPBlock(features=256, out_features=512, sizes=(1, 2, 3))
+        self.pool45 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
+
+        self.stage5 = PSPBlock(features=512, out_features=512, sizes=(1, 2, 3))
+        self.pool56 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
+
+        self.stage6 = Bottom_stage(512, 256, 512)
+
+        # decoder
+        self.stage5d = u2net.RSU4F(1024,256,512)       
+        self.stage4d = u2net.RSU4(1024,128,256)
+        self.stage3d = u2net.RSU5(512,64,128)
+        self.stage2d = u2net.RSU6(256,32,64)
+        self.stage1d = u2net.RSU7(128,16,64)
+
+        self.side1 = nn.Conv2d(64,out_ch,3,padding=1)
+        self.side2 = nn.Conv2d(64,out_ch,3,padding=1)
+        self.side3 = nn.Conv2d(128,out_ch,3,padding=1)
+        self.side4 = nn.Conv2d(256,out_ch,3,padding=1)
+        self.side5 = nn.Conv2d(512,out_ch,3,padding=1)
+        self.side6 = nn.Conv2d(512,out_ch,3,padding=1)
+
+        self.outconv = nn.Conv2d(6,out_ch,1)
+
+    def forward(self,x):
+
+        hx = x
+
+        #stage 1
+        hx1 = self.stage1(hx)
+        hx = self.pool12(hx1)
+
+        #stage 2
+        hx2 = self.stage2(hx)
+        hx = self.pool23(hx2)
+
+        #stage 3
+        hx3 = self.stage3(hx)
+        hx = self.pool34(hx3)
+
+        #stage 4
+        hx4 = self.stage4(hx)
+        hx = self.pool45(hx4)
+
+        #stage 5
+        hx5 = self.stage5(hx)
+        hx = self.pool56(hx5)
+
+        #stage 6
+        hx6 = self.stage6(hx)
+        hx6up = _upsample_like(hx6,hx5)
+
+        #-------------------- decoder --------------------
+
+        hx5d = self.stage5d(torch.cat(hx6up,hx5))
+        hx5dup = _upsample_like(hx5d,hx4)
+
+        hx4d = self.stage4d(torch.cat(hx5dup,hx4))
+        hx4dup = _upsample_like(hx4d,hx3)
+
+        hx3d = self.stage3d(torch.cat(hx4dup,hx3))
+        hx3dup = _upsample_like(hx3d,hx2)
+
+        hx2d = self.stage2d(torch.cat(hx3dup,hx2))
+        hx2dup = _upsample_like(hx2d,hx1)
+
+        hx1d = self.stage1d(torch.cat(hx2dup,hx1))
+
+
+        #side output
+        d1 = self.side1(hx1d)
+
+        d2 = self.side2(hx2d)
+        d2 = _upsample_like(d2,d1)
+
+        d3 = self.side3(hx3d)
+        d3 = _upsample_like(d3,d1)
+
+        d4 = self.side4(hx4d)
+        d4 = _upsample_like(d4,d1)
+
+        d5 = self.side5(hx5d)
+        d5 = _upsample_like(d5,d1)
+
+        d6 = self.side6(hx6)
+        d6 = _upsample_like(d6,d1)
+
+        d0 = self.outconv(torch.cat((d1,d2,d3,d4,d5,d6),1))
+
+        return F.sigmoid(d0), F.sigmoid(d1), F.sigmoid(d2), F.sigmoid(d3), F.sigmoid(d4), F.sigmoid(d5), F.sigmoid(d6)
+
