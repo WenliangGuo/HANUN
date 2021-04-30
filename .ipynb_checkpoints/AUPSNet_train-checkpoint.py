@@ -65,7 +65,7 @@ label_ext = '.png'
 
 model_dir = os.path.join(os.getcwd(), 'saved_models', "aupsnet_noSE" + os.sep)
 
-epoch_num = 500
+epoch_num = 300
 batch_size_train = 36
 batch_size_val = 1
 train_num = 0
@@ -174,9 +174,3 @@ for epoch in range(0, epoch_num):
         net.train()  # resume train
         ite_num4val = 0
 
-    x = range(0, len(Loss_list))
-    y = Loss_list
-    plt.plot(x, y, '.-')
-    plt.xlabel('Test loss vs. ite_num')
-    plt.ylabel('Test loss')
-    plt.savefig("loss/loss_{}.png".format(str(epoch+1)))

@@ -836,19 +836,19 @@ class UPSPNET_RSU_noSE(nn.Module):
 
         #-------------------- decoder --------------------
 
-        hx5d = self.stage5d(torch.cat(hx6up,hx5))
+        hx5d = self.stage5d(torch.cat((hx6up,hx5),1))
         hx5dup = _upsample_like(hx5d,hx4)
 
-        hx4d = self.stage4d(torch.cat(hx5dup,hx4))
+        hx4d = self.stage4d(torch.cat((hx5dup,hx4),1))
         hx4dup = _upsample_like(hx4d,hx3)
 
-        hx3d = self.stage3d(torch.cat(hx4dup,hx3))
+        hx3d = self.stage3d(torch.cat((hx4dup,hx3),1))
         hx3dup = _upsample_like(hx3d,hx2)
 
-        hx2d = self.stage2d(torch.cat(hx3dup,hx2))
+        hx2d = self.stage2d(torch.cat((hx3dup,hx2),1))
         hx2dup = _upsample_like(hx2d,hx1)
 
-        hx1d = self.stage1d(torch.cat(hx2dup,hx1))
+        hx1d = self.stage1d(torch.cat((hx2dup,hx1),1))
 
 
         #side output
