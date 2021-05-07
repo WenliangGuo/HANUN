@@ -357,10 +357,10 @@ class UPSPNET_7(nn.Module):
 
 
 
-class UPSPNET(nn.Module):
+class AUPSNET_allPP(nn.Module):
 
     def __init__(self,in_ch=3,out_ch=1):
-        super(UPSPNET,self).__init__()
+        super(AUPSNET_allPP,self).__init__()
 
         self.stage1 = PSPBlock(features=in_ch, out_features=64, sizes=(1, 2, 3, 6))
         self.pool12 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
