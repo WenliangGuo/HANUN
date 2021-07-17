@@ -10,4 +10,4 @@ The code for our paper **AUPSNet (Attention U-shaped Pyramid Segmentation Networ
 ## Results
 ![](figure/demo.png)
 ## P-R Curve
-![](figure/PR Curve.png)
+![](figure/PR-Curve.png)
