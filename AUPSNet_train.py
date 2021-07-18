@@ -54,18 +54,18 @@ def muti_bce_loss_fusion(d0, d1, d2, d3, d4, d5, d6, labels_v):
 
 # ------- 2. set the directory of training dataset --------
 
-model_name = 'auppsnet_noSE' 
+model_name = 'upspnet' #'u2netp'
 
-data_dir = os.path.join(os.getcwd(), '/mnt/DATA_512/Train' + os.sep)
+data_dir = os.path.join(os.getcwd(), '/mnt/DATA/Train' + os.sep)
 tra_image_dir = os.path.join('src' + os.sep)
 tra_label_dir = os.path.join('gt' + os.sep)
 
 image_ext = '.jpg'
 label_ext = '.png'
 
-model_dir = os.path.join(os.getcwd(), 'saved_models', "aupsnet_noSE" + os.sep)
+model_dir = os.path.join(os.getcwd(), 'saved_models', "auspnet" + os.sep)
 
-epoch_num = 300
+epoch_num = 500
 batch_size_train = 36
 batch_size_val = 1
 train_num = 0
@@ -111,7 +111,7 @@ salobj_dataloader = DataLoader(salobj_dataset, batch_size=batch_size_train, shuf
 # ------- 3. define model --------
 # define the net
 
-net = UPSPNet.UPSPNET_RSU_noSE(3, 1)
+net = UPSPNet.UPSPNET_RSU(3, 1)
 #net=torch.nn.DataParallel(net)
 #net = nn.DataParallel(net) # multi-GPU
 
@@ -174,3 +174,9 @@ for epoch in range(0, epoch_num):
         net.train()  # resume train
         ite_num4val = 0
 
+    x = range(0, len(Loss_list))
+    y = Loss_list
+    plt.plot(x, y, '.-')
+    plt.xlabel('Test loss vs. ite_num')
+    plt.ylabel('Test loss')
+    plt.savefig("loss/loss_{}.png".format(str(epoch+1)))

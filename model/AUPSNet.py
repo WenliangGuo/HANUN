@@ -35,9 +35,9 @@ class Bottom_stage(nn.Module):
         return hx1d + hxin
 
 
-class PSPBlock(nn.Module):
+class PPBlock(nn.Module):
     def __init__(self, features, out_features=1024, sizes=(1, 2, 3, 6)):
-        super().__init__()
+        super(PPBlock, self).__init__()
         self.stages = []
         self.stages = nn.ModuleList([self._make_stage(features, size) for size in sizes])
         self.bottleneck = nn.Conv2d(features * (len(sizes) + 1), out_features, kernel_size=1)
@@ -78,318 +78,39 @@ class SE_Block(nn.Module):
         y = self.fc(y).view(b, c, 1, 1)
         return x * y.expand_as(x)
 
-class UPSPNET_8(nn.Module):
+class AUPSNET_ALLPP(nn.Module):
 
     def __init__(self,in_ch=3,out_ch=1):
-        super(UPSPNET_8,self).__init__()
+        super(AUPSNET_ALLPP,self).__init__()
 
-        self.stage1 = PSPBlock(features=in_ch, out_features=64, sizes=(1, 2, 3, 6))
+        self.stage1 = PPBlock(features=in_ch, out_features=64, sizes=(1, 2, 3, 6))
         self.pool12 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
 
-        self.stage2 = PSPBlock(features=64, out_features=128, sizes=(1, 2, 3, 6))
+        self.stage2 = PPBlock(features=64, out_features=128, sizes=(1, 2, 3, 6))
         self.pool23 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
 
-        self.stage3 = PSPBlock(features=128, out_features=256, sizes=(1, 2, 3, 6))
+        self.stage3 = PPBlock(features=128, out_features=256, sizes=(1, 2, 3, 6))
         self.pool34 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
 
-        self.stage4 = PSPBlock(features=256, out_features=512, sizes=(1, 2, 3, 6))
+        self.stage4 = PPBlock(features=256, out_features=512, sizes=(1, 2, 3))
         self.pool45 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
 
-        self.stage5 = PSPBlock(features=512, out_features=1024, sizes=(1, 2, 3, 6))
-        self.pool56 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
-
-        self.stage6 = PSPBlock(features=1024, out_features=2048, sizes=(1, 2, 3))
-        self.pool67 = nn.MaxPool2d(2, stride=2, ceil_mode=True)
-
-        self.stage7 = PSPBlock(features=2048, out_features=2048, sizes=(1, 2, 3))
-        self.pool78 = nn.MaxPool2d(2, stride=2, ceil_mode=True)
-
-        self.stage8 = Bottom_stage(2048, 1024, 2048)
-
-        # decoder
-        self.se1 = SE_Block(ch_in=4096);
-        self.stage7d = PSPBlock(features=4096, out_features=2048)
-        self.se2 = SE_Block(ch_in=4096);
-        self.stage6d = PSPBlock(features=4096, out_features=1024)
-        self.se3 = SE_Block(ch_in=2048);
-        self.stage5d = PSPBlock(features=2048, out_features=512)
-        self.se4 = SE_Block(ch_in=1024);
-        self.stage4d = PSPBlock(features=1024, out_features=256)
-        self.se5 = SE_Block(ch_in=512);
-        self.stage3d = PSPBlock(features=512, out_features=128)
-        self.se6 = SE_Block(ch_in=256);
-        self.stage2d = PSPBlock(features=256, out_features=64)
-        self.se7 = SE_Block(ch_in=128);
-        self.stage1d = PSPBlock(features=128, out_features=64)
-
-        self.side1 = nn.Conv2d(64,out_ch,3,padding=1)
-        self.side2 = nn.Conv2d(64,out_ch,3,padding=1)
-        self.side3 = nn.Conv2d(128,out_ch,3,padding=1)
-        self.side4 = nn.Conv2d(256,out_ch,3,padding=1)
-        self.side5 = nn.Conv2d(512,out_ch,3,padding=1)
-        self.side6 = nn.Conv2d(1024,out_ch,3,padding=1)
-        self.side7 = nn.Conv2d(2048, out_ch, 3, padding=1)
-        self.side8 = nn.Conv2d(2048, out_ch, 3, padding=1)
-
-        self.outconv = nn.Conv2d(8,out_ch,1)
-
-    def forward(self,x):
-
-        hx = x
-
-        #stage 1
-        hx1 = self.stage1(hx)
-        hx = self.pool12(hx1)
-
-        #stage 2
-        hx2 = self.stage2(hx)
-        hx = self.pool23(hx2)
-
-        #stage 3
-        hx3 = self.stage3(hx)
-        hx = self.pool34(hx3)
-
-        #stage 4
-        hx4 = self.stage4(hx)
-        hx = self.pool45(hx4)
-
-        #stage 5
-        hx5 = self.stage5(hx)
-        hx = self.pool56(hx5)
-
-        #stage 6
-        hx6 = self.stage6(hx)
-        hx = self.pool67(hx6)
-
-        hx7 = self.stage7(hx)
-        hx = self.pool78(hx7)
-
-        hx8 = self.stage8(hx)
-        hx8up = _upsample_like(hx8, hx7)
-
-        #-------------------- decoder --------------------
-
-        se1 = self.se1(torch.cat((hx8up,hx7),1))
-        hx7d = self.stage7d(se1)
-        hx7dup = _upsample_like(hx7d,hx6)
-
-        se2 = self.se2(torch.cat((hx7dup,hx6),1))
-        hx6d = self.stage6d(se2)
-        hx6dup = _upsample_like(hx6d,hx5)
-
-        se3 = self.se3(torch.cat((hx6dup,hx5),1))
-        hx5d = self.stage5d(se3)
-        hx5dup = _upsample_like(hx5d,hx4)
-
-        se4 = self.se4(torch.cat((hx5dup,hx4),1))
-        hx4d = self.stage4d(se4)
-        hx4dup = _upsample_like(hx4d,hx3)
-
-        se5 = self.se5(torch.cat((hx4dup,hx3),1))
-        hx3d = self.stage3d(se5)
-        hx3dup = _upsample_like(hx3d, hx2)
-
-        se6 = self.se6(torch.cat((hx3dup, hx2), 1))
-        hx2d = self.stage2d(se6)
-        hx2dup = _upsample_like(hx2d, hx1)
-
-        se7 = self.se7(torch.cat((hx2dup, hx1), 1))
-        hx1d = self.stage1d(se7)
-
-        #side output
-        d1 = self.side1(hx1d)
-
-        d2 = self.side2(hx2d)
-        d2 = _upsample_like(d2,d1)
-
-        d3 = self.side3(hx3d)
-        d3 = _upsample_like(d3,d1)
-
-        d4 = self.side4(hx4d)
-        d4 = _upsample_like(d4,d1)
-
-        d5 = self.side5(hx5d)
-        d5 = _upsample_like(d5,d1)
-
-        d6 = self.side6(hx6d)
-        d6 = _upsample_like(d6,d1)
-
-        d7 = self.side7(hx7d)
-        d7 = _upsample_like(d7, d1)
-
-        d8 = self.side7(hx8)
-        d8 = _upsample_like(d8, d1)
-
-        d0 = self.outconv(torch.cat((d1,d2,d3,d4,d5,d6,d7, d8),1))
-
-        return F.sigmoid(d0), F.sigmoid(d1), F.sigmoid(d2), F.sigmoid(d3), F.sigmoid(d4), F.sigmoid(d5), F.sigmoid(d6), F.sigmoid(d7), F.sigmoid(d8)
-
-
-class UPSPNET_7(nn.Module):
-
-    def __init__(self,in_ch=3,out_ch=1):
-        super(UPSPNET_7,self).__init__()
-
-        self.stage1 = PSPBlock(features=in_ch, out_features=64, sizes=(1, 2, 3, 6))
-        self.pool12 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
-
-        self.stage2 = PSPBlock(features=64, out_features=128, sizes=(1, 2, 3, 6))
-        self.pool23 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
-
-        self.stage3 = PSPBlock(features=128, out_features=256, sizes=(1, 2, 3, 6))
-        self.pool34 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
-
-        self.stage4 = PSPBlock(features=256, out_features=512, sizes=(1, 2, 3))
-        self.pool45 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
-
-        self.stage5 = PSPBlock(features=512, out_features=1024, sizes=(1, 2, 3))
-        self.pool56 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
-
-        self.stage6 = PSPBlock(features=1024, out_features=1024, sizes=(1, 2, 3))
-        self.pool67 = nn.MaxPool2d(2, stride=2, ceil_mode=True)
-
-        self.stage7 = Bottom_stage(1024, 512, 1024)
-
-        # decoder
-        self.se1 = SE_Block(ch_in=2048);
-        self.stage6d = PSPBlock(features=2048, out_features=1024)
-        self.se2 = SE_Block(ch_in=2048);
-        self.stage5d = PSPBlock(features=2048, out_features=512)
-        self.se3 = SE_Block(ch_in=1024);
-        self.stage4d = PSPBlock(features=1024, out_features=256)
-        self.se4 = SE_Block(ch_in=512);
-        self.stage3d = PSPBlock(features=512, out_features=128)
-        self.se5 = SE_Block(ch_in=256);
-        self.stage2d = PSPBlock(features=256, out_features=64)
-        self.se6 = SE_Block(ch_in=128);
-        self.stage1d = PSPBlock(features=128, out_features=64)
-
-        self.side1 = nn.Conv2d(64,out_ch,3,padding=1)
-        self.side2 = nn.Conv2d(64,out_ch,3,padding=1)
-        self.side3 = nn.Conv2d(128,out_ch,3,padding=1)
-        self.side4 = nn.Conv2d(256,out_ch,3,padding=1)
-        self.side5 = nn.Conv2d(512,out_ch,3,padding=1)
-        self.side6 = nn.Conv2d(1024,out_ch,3,padding=1)
-        self.side7 = nn.Conv2d(1024, out_ch, 3, padding=1)
-
-        self.outconv = nn.Conv2d(7,out_ch,1)
-
-    def forward(self,x):
-
-        hx = x
-
-        #stage 1
-        hx1 = self.stage1(hx)
-        hx = self.pool12(hx1)
-
-        #stage 2
-        hx2 = self.stage2(hx)
-        hx = self.pool23(hx2)
-
-        #stage 3
-        hx3 = self.stage3(hx)
-        hx = self.pool34(hx3)
-
-        #stage 4
-        hx4 = self.stage4(hx)
-        hx = self.pool45(hx4)
-
-        #stage 5
-        hx5 = self.stage5(hx)
-        hx = self.pool56(hx5)
-
-        #stage 6
-        hx6 = self.stage6(hx)
-        hx = self.pool67(hx6)
-
-        hx7 = self.stage7(hx)
-        hx7up = _upsample_like(hx7, hx6)
-
-        #-------------------- decoder --------------------
-
-        se1 = self.se1(torch.cat((hx7up,hx6),1))
-        hx6d = self.stage6d(se1)
-        hx6dup = _upsample_like(hx6d,hx5)
-
-        se2 = self.se2(torch.cat((hx6dup,hx5),1))
-        hx5d = self.stage5d(se2)
-        hx5dup = _upsample_like(hx5d,hx4)
-
-        se3 = self.se3(torch.cat((hx5dup,hx4),1))
-        hx4d = self.stage4d(se3)
-        hx4dup = _upsample_like(hx4d,hx3)
-
-        se4 = self.se4(torch.cat((hx4dup,hx3),1))
-        hx3d = self.stage3d(se4)
-        hx3dup = _upsample_like(hx3d,hx2)
-
-        se5 = self.se5(torch.cat((hx3dup,hx2),1))
-        hx2d = self.stage2d(se5)
-        hx2dup = _upsample_like(hx2d, hx1)
-
-        se6 = self.se6(torch.cat((hx2dup, hx1), 1))
-        hx1d = self.stage1d(se6)
-
-        #side output
-        d1 = self.side1(hx1d)
-
-        d2 = self.side2(hx2d)
-        d2 = _upsample_like(d2,d1)
-
-        d3 = self.side3(hx3d)
-        d3 = _upsample_like(d3,d1)
-
-        d4 = self.side4(hx4d)
-        d4 = _upsample_like(d4,d1)
-
-        d5 = self.side5(hx5d)
-        d5 = _upsample_like(d5,d1)
-
-        d6 = self.side6(hx6)
-        d6 = _upsample_like(d6,d1)
-
-        d7 = self.side7(hx7)
-        d7 = _upsample_like(d7, d1)
-
-        d0 = self.outconv(torch.cat((d1,d2,d3,d4,d5,d6,d7),1))
-
-        return F.sigmoid(d0), F.sigmoid(d1), F.sigmoid(d2), F.sigmoid(d3), F.sigmoid(d4), F.sigmoid(d5), F.sigmoid(d6), F.sigmoid(d7)
-
-
-
-class AUPSNET_allPP(nn.Module):
-
-    def __init__(self,in_ch=3,out_ch=1):
-        super(AUPSNET_allPP,self).__init__()
-
-        self.stage1 = PSPBlock(features=in_ch, out_features=64, sizes=(1, 2, 3, 6))
-        self.pool12 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
-
-        self.stage2 = PSPBlock(features=64, out_features=128, sizes=(1, 2, 3, 6))
-        self.pool23 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
-
-        self.stage3 = PSPBlock(features=128, out_features=256, sizes=(1, 2, 3, 6))
-        self.pool34 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
-
-        self.stage4 = PSPBlock(features=256, out_features=512, sizes=(1, 2, 3))
-        self.pool45 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
-
-        self.stage5 = PSPBlock(features=512, out_features=512, sizes=(1, 2, 3))
+        self.stage5 = PPBlock(features=512, out_features=512, sizes=(1, 2, 3))
         self.pool56 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
 
         self.stage6 = Bottom_stage(512, 256, 512)
 
         # decoder
         self.se1 = SE_Block(ch_in=1024);
-        self.stage5d = PSPBlock(features=1024, out_features=512)
+        self.stage5d = PPBlock(features=1024, out_features=512)
         self.se2 = SE_Block(ch_in=1024);
-        self.stage4d = PSPBlock(features=1024, out_features=256)
+        self.stage4d = PPBlock(features=1024, out_features=256)
         self.se3 = SE_Block(ch_in=512);
-        self.stage3d = PSPBlock(features=512, out_features=128)
+        self.stage3d = PPBlock(features=512, out_features=128)
         self.se4 = SE_Block(ch_in=256);
-        self.stage2d = PSPBlock(features=256, out_features=64)
+        self.stage2d = PPBlock(features=256, out_features=64)
         self.se5 = SE_Block(ch_in=128);
-        self.stage1d = PSPBlock(features=128, out_features=64)
+        self.stage1d = PPBlock(features=128, out_features=64)
 
         self.side1 = nn.Conv2d(64,out_ch,3,padding=1)
         self.side2 = nn.Conv2d(64,out_ch,3,padding=1)
@@ -472,42 +193,172 @@ class AUPSNET_allPP(nn.Module):
 
         return F.sigmoid(d0), F.sigmoid(d1), F.sigmoid(d2), F.sigmoid(d3), F.sigmoid(d4), F.sigmoid(d5), F.sigmoid(d6)
 
-class UPSPNET_5(nn.Module):
+class AUPSNET_7(nn.Module):
 
     def __init__(self,in_ch=3,out_ch=1):
-        super(UPSPNET_5,self).__init__()
+        super(AUPSNET_7,self).__init__()
 
-        self.stage1 = PSPBlock(features=in_ch, out_features=64, sizes=(1, 2, 3, 6))
-        self.pool12 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
+        self.stage1 = PPBlock(features=in_ch, out_features=64, sizes=(1, 2, 3, 6))
+        self.pool12 = nn.MaxPool2d(2, stride=2, ceil_mode=True)
 
-        self.stage2 = PSPBlock(features=64, out_features=128, sizes=(1, 2, 3, 6))
-        self.pool23 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
+        self.stage2 = PPBlock(features=64, out_features=128, sizes=(1, 2, 3, 6))
+        self.pool23 = nn.MaxPool2d(2, stride=2, ceil_mode=True)
 
-        self.stage3 = PSPBlock(features=128, out_features=256, sizes=(1, 2, 3, 6))
-        self.pool34 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
+        self.stage3 = PPBlock(features=128, out_features=256, sizes=(1, 2, 3, 6))
+        self.pool34 = nn.MaxPool2d(2, stride=2, ceil_mode=True)
 
-        self.stage4 = PSPBlock(features=256, out_features=512, sizes=(1, 2, 3))
-        self.pool45 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
+        self.stage4 = PPBlock(features=256, out_features=512, sizes=(1, 2, 3))
+        self.pool45 = nn.MaxPool2d(2, stride=2, ceil_mode=True)
 
-        self.stage5 = Bottom_stage(512, 256, 512)
+        self.stage5 = PPBlock(features=512, out_features=1024, sizes=(1, 2, 3))
+        self.pool56 = nn.MaxPool2d(2, stride=2, ceil_mode=True)
+
+        self.stage6 = PPBlock(features=1024, out_features=1024, sizes=(1, 2, 3))
+        self.pool67 = nn.MaxPool2d(2, stride=2, ceil_mode=True)
+
+        self.stage7 = Bottom_stage(1024, 512, 1024)
 
         # decoder
-        self.se1 = SE_Block(ch_in=1024);
-        self.stage4d = PSPBlock(features=1024, out_features=256)
-        self.se2 = SE_Block(ch_in=512);
-        self.stage3d = PSPBlock(features=512, out_features=128)
-        self.se3 = SE_Block(ch_in=256);
-        self.stage2d = PSPBlock(features=256, out_features=64)
-        self.se4 = SE_Block(ch_in=128);
-        self.stage1d = PSPBlock(features=128, out_features=64)
+        self.se1 = SE_Block(ch_in=2048)
+        self.stage5d = u2net.RSU4F(2048, 512, 1024)
+        self.se2 = SE_Block(ch_in=2048)
+        self.stage4d = u2net.RSU4(2048, 256, 512)
+        self.se3 = SE_Block(ch_in=1024)
+        self.stage3d = u2net.RSU5(1024, 128, 256)
+        self.se4 = SE_Block(ch_in=512)
+        self.stage4d = u2net.RSU6(512, 64, 128)
+        self.se5 = SE_Block(ch_in=256)
+        self.stage5d = u2net.RSU7(256, 32, 64)
+        self.se6 = SE_Block(ch_in=128)
+        self.stage6d = u2net.RSU8(128, 16, 64)
 
-        self.side1 = nn.Conv2d(64,out_ch,3,padding=1)
-        self.side2 = nn.Conv2d(64,out_ch,3,padding=1)
-        self.side3 = nn.Conv2d(128,out_ch,3,padding=1)
-        self.side4 = nn.Conv2d(256,out_ch,3,padding=1)
-        self.side5 = nn.Conv2d(512,out_ch,3,padding=1)
+        self.side1 = nn.Conv2d(64, out_ch, 3, padding=1)
+        self.side2 = nn.Conv2d(64, out_ch, 3, padding=1)
+        self.side3 = nn.Conv2d(128, out_ch, 3, padding=1)
+        self.side4 = nn.Conv2d(256, out_ch, 3, padding=1)
+        self.side5 = nn.Conv2d(512, out_ch, 3, padding=1)
+        self.side6 = nn.Conv2d(1024, out_ch, 3, padding=1)
+        self.side7 = nn.Conv2d(1024, out_ch, 3, padding=1)
 
-        self.outconv = nn.Conv2d(5,out_ch,1)
+        self.outconv = nn.Conv2d(7, out_ch, 1)
+
+    def forward(self, x):
+        hx = x
+
+        # stage 1
+        hx1 = self.stage1(hx)
+        hx = self.pool12(hx1)
+
+        # stage 2
+        hx2 = self.stage2(hx)
+        hx = self.pool23(hx2)
+
+        # stage 3
+        hx3 = self.stage3(hx)
+        hx = self.pool34(hx3)
+
+        # stage 4
+        hx4 = self.stage4(hx)
+        hx = self.pool45(hx4)
+
+        # stage 5
+        hx5 = self.stage5(hx)
+        hx = self.pool56(hx5)
+
+        # stage 6
+        hx6 = self.stage6(hx)
+        hx = self.pool67(hx6)
+
+        # stage 7
+        hx7 = self.stage7(hx)
+        hx7up = _upsample_like(hx7, hx6)
+
+        # -------------------- decoder --------------------
+
+        se1 = self.se1(torch.cat((hx7up, hx6), 1))
+        hx6d = self.stage6d(se1)
+        hx6dup = _upsample_like(hx6d, hx5)
+
+        se2 = self.se2(torch.cat((hx6dup, hx5), 1))
+        hx5d = self.stage5d(se2)
+        hx5dup = _upsample_like(hx5d, hx4)
+
+        se3 = self.se3(torch.cat((hx5dup, hx4), 1))
+        hx4d = self.stage4d(se3)
+        hx4dup = _upsample_like(hx4d, hx3)
+
+        se4 = self.se4(torch.cat((hx4dup, hx3), 1))
+        hx3d = self.stage3d(se4)
+        hx3dup = _upsample_like(hx3d, hx2)
+
+        se5 = self.se5(torch.cat((hx3dup, hx2), 1))
+        hx2d = self.stage2d(se5)
+        hx2dup = _upsample_like(hx2d, hx1)
+
+        se6 = self.se6(torch.cat((hx2dup, hx1), 1))
+        hx1d = self.stage1d(se6)
+
+        # side output
+        d1 = self.side1(hx1d)
+
+        d2 = self.side2(hx2d)
+        d2 = _upsample_like(d2, d1)
+
+        d3 = self.side3(hx3d)
+        d3 = _upsample_like(d3, d1)
+
+        d4 = self.side4(hx4d)
+        d4 = _upsample_like(d4, d1)
+
+        d5 = self.side5(hx5d)
+        d5 = _upsample_like(d5, d1)
+
+        d6 = self.side6(hx6)
+        d6 = _upsample_like(d6, d1)
+
+        d7 = self.side7(hx7)
+        d7 = _upsample_like(d7, d1)
+
+        d0 = self.outconv(torch.cat((d1, d2, d3, d4, d5, d6, d7), 1))
+
+        return F.sigmoid(d0), F.sigmoid(d1), F.sigmoid(d2), F.sigmoid(d3), F.sigmoid(d4), F.sigmoid(d5), F.sigmoid(d6), F.sigmoid(d7)
+
+class AUPSNET_5(nn.Module):
+
+    def __init__(self,in_ch=3,out_ch=1):
+        super(AUPSNET_5,self).__init__()
+
+        self.stage1 = PPBlock(features=in_ch, out_features=64, sizes=(1, 2, 3, 6))
+        self.pool12 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
+
+        self.stage2 = PPBlock(features=64, out_features=128, sizes=(1, 2, 3, 6))
+        self.pool23 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
+
+        self.stage3 = PPBlock(features=128, out_features=256, sizes=(1, 2, 3, 6))
+        self.pool34 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
+
+        self.stage4 = PPBlock(features=256, out_features=256, sizes=(1, 2, 3))
+        self.pool45 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
+
+        self.stage5 = Bottom_stage(256, 128, 256)
+
+        # decoder
+        self.se1 = SE_Block(ch_in=512)
+        self.stage5d = u2net.RSU4F(512, 128, 256)
+        self.se2 = SE_Block(ch_in=512)
+        self.stage4d = u2net.RSU4(512, 64, 128)
+        self.se3 = SE_Block(ch_in=256)
+        self.stage3d = u2net.RSU5(512, 64, 64)
+        self.se4 = SE_Block(ch_in=128)
+        self.stage2d = u2net.RSU6(256, 32, 64)
+
+        self.side1 = nn.Conv2d(64, out_ch, 3, padding=1)
+        self.side2 = nn.Conv2d(64, out_ch, 3, padding=1)
+        self.side3 = nn.Conv2d(128, out_ch, 3, padding=1)
+        self.side4 = nn.Conv2d(256, out_ch, 3, padding=1)
+        self.side5 = nn.Conv2d(256, out_ch, 3, padding=1)
+
+        self.outconv = nn.Conv2d(5, out_ch, 1)
 
     def forward(self,x):
 
@@ -534,8 +385,6 @@ class UPSPNET_5(nn.Module):
         hx5up = _upsample_like(hx5,hx4)
 
         #-------------------- decoder --------------------
-        print(hx5up.size())
-        print(hx4.size())
 
         se1 = self.se1(torch.cat((hx5up,hx4),1))
         hx4d = self.stage4d(se1)
@@ -556,121 +405,39 @@ class UPSPNET_5(nn.Module):
         d1 = self.side1(hx1d)
 
         d2 = self.side2(hx2d)
-        d2 = _upsample_like(d2,d1)
+        d2 = _upsample_like(d2, d1)
 
         d3 = self.side3(hx3d)
-        d3 = _upsample_like(d3,d1)
+        d3 = _upsample_like(d3, d1)
 
         d4 = self.side4(hx4d)
-        d4 = _upsample_like(d4,d1)
+        d4 = _upsample_like(d4, d1)
 
         d5 = self.side5(hx5)
-        d5 = _upsample_like(d5,d1)
+        d5 = _upsample_like(d5, d1)
 
-        d0 = self.outconv(torch.cat((d1,d2,d3,d4,d5),1))
+        d0 = self.outconv(torch.cat((d1, d2, d3, d4, d5), 1))
 
         return F.sigmoid(d0), F.sigmoid(d1), F.sigmoid(d2), F.sigmoid(d3), F.sigmoid(d4), F.sigmoid(d5)
 
-class UPSPNET_4(nn.Module):
+class AUPSNET(nn.Module):
 
     def __init__(self,in_ch=3,out_ch=1):
-        super(UPSPNET_4,self).__init__()
+        super(AUPSNET,self).__init__()
 
-        self.stage1 = PSPBlock(features=in_ch, out_features=64, sizes=(1, 2, 3, 6))
+        self.stage1 = PPBlock(features=in_ch, out_features=64, sizes=(1, 2, 3, 6))
         self.pool12 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
 
-        self.stage2 = PSPBlock(features=64, out_features=128, sizes=(1, 2, 3, 6))
-        self.pool23 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
-
-        self.stage3 = PSPBlock(features=128, out_features=256, sizes=(1, 2, 3, 6))
-        self.pool34 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
-
-        self.stage4 = Bottom_stage(256, 128, 256)
-
-        # decoder
-        self.se1 = SE_Block(ch_in=512);
-        self.stage3d = PSPBlock(features=512, out_features=128)
-        self.se2 = SE_Block(ch_in=256);
-        self.stage2d = PSPBlock(features=256, out_features=64)
-        self.se3 = SE_Block(ch_in=128);
-        self.stage1d = PSPBlock(features=128, out_features=64)
-
-        self.side1 = nn.Conv2d(64,out_ch,3,padding=1)
-        self.side2 = nn.Conv2d(64,out_ch,3,padding=1)
-        self.side3 = nn.Conv2d(128,out_ch,3,padding=1)
-        self.side4 = nn.Conv2d(256,out_ch,3,padding=1)
-
-        self.outconv = nn.Conv2d(4,out_ch,1)
-
-    def forward(self,x):
-
-        hx = x
-
-        #stage 1
-        hx1 = self.stage1(hx)
-        hx = self.pool12(hx1)
-
-        #stage 2
-        hx2 = self.stage2(hx)
-        hx = self.pool23(hx2)
-
-        #stage 3
-        hx3 = self.stage3(hx)
-        hx = self.pool34(hx3)
-
-        #stage 4
-        hx4 = self.stage4(hx)
-        hx4up = _upsample_like(hx4,hx3)
-
-        #-------------------- decoder --------------------
-        print(hx4up.size())
-        print(hx3.size())
-
-        se1 = self.se1(torch.cat((hx4up,hx3),1))
-        hx3d = self.stage3d(se1)
-        hx3dup = _upsample_like(hx3d,hx2)
-
-        se2 = self.se2(torch.cat((hx3dup,hx2),1))
-        hx2d = self.stage2d(se2)
-        hx2dup = _upsample_like(hx2d,hx1)
-
-        se3 = self.se3(torch.cat((hx2dup,hx1),1))
-        hx1d = self.stage1d(se3)
-
-        #side output
-        d1 = self.side1(hx1d)
-
-        d2 = self.side2(hx2d)
-        d2 = _upsample_like(d2,d1)
-
-        d3 = self.side3(hx3d)
-        d3 = _upsample_like(d3,d1)
-
-        d4 = self.side4(hx4)
-        d4 = _upsample_like(d4,d1)
-
-        d0 = self.outconv(torch.cat((d1,d2,d3,d4),1))
-
-        return F.sigmoid(d0), F.sigmoid(d1), F.sigmoid(d2), F.sigmoid(d3), F.sigmoid(d4)
-
-class UPSPNET_RSU(nn.Module):
-
-    def __init__(self,in_ch=3,out_ch=1):
-        super(UPSPNET_RSU,self).__init__()
-
-        self.stage1 = PSPBlock(features=in_ch, out_features=64, sizes=(1, 2, 3, 6))
-        self.pool12 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
-
-        self.stage2 = PSPBlock(features=64, out_features=128, sizes=(1, 2, 3, 6))
+        self.stage2 = PPBlock(features=64, out_features=128, sizes=(1, 2, 3, 6))
         self.pool23 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
  
-        self.stage3 = PSPBlock(features=128, out_features=256, sizes=(1, 2, 3, 6))
+        self.stage3 = PPBlock(features=128, out_features=256, sizes=(1, 2, 3, 6))
         self.pool34 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
 
-        self.stage4 = PSPBlock(features=256, out_features=512, sizes=(1, 2, 3))
+        self.stage4 = PPBlock(features=256, out_features=512, sizes=(1, 2, 3))
         self.pool45 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
 
-        self.stage5 = PSPBlock(features=512, out_features=512, sizes=(1, 2, 3))
+        self.stage5 = PPBlock(features=512, out_features=512, sizes=(1, 2, 3))
         self.pool56 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
 
         self.stage6 = Bottom_stage(512, 256, 512)
@@ -768,24 +535,24 @@ class UPSPNET_RSU(nn.Module):
 
         return F.sigmoid(d0), F.sigmoid(d1), F.sigmoid(d2), F.sigmoid(d3), F.sigmoid(d4), F.sigmoid(d5), F.sigmoid(d6)
     
-class UPSPNET_RSU_noSE(nn.Module):
+class AUPSNET_NOSE(nn.Module):
 
     def __init__(self,in_ch=3,out_ch=1):
-        super(UPSPNET_RSU_noSE,self).__init__()
+        super(AUPSNET_NOSE,self).__init__()
 
-        self.stage1 = PSPBlock(features=in_ch, out_features=64, sizes=(1, 2, 3, 6))
+        self.stage1 = PPBlock(features=in_ch, out_features=64, sizes=(1, 2, 3, 6))
         self.pool12 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
 
-        self.stage2 = PSPBlock(features=64, out_features=128, sizes=(1, 2, 3, 6))
+        self.stage2 = PPBlock(features=64, out_features=128, sizes=(1, 2, 3, 6))
         self.pool23 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
  
-        self.stage3 = PSPBlock(features=128, out_features=256, sizes=(1, 2, 3, 6))
+        self.stage3 = PPBlock(features=128, out_features=256, sizes=(1, 2, 3, 6))
         self.pool34 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
 
-        self.stage4 = PSPBlock(features=256, out_features=512, sizes=(1, 2, 3))
+        self.stage4 = PPBlock(features=256, out_features=512, sizes=(1, 2, 3))
         self.pool45 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
 
-        self.stage5 = PSPBlock(features=512, out_features=512, sizes=(1, 2, 3))
+        self.stage5 = PPBlock(features=512, out_features=512, sizes=(1, 2, 3))
         self.pool56 = nn.MaxPool2d(2,stride=2,ceil_mode=True)
 
         self.stage6 = Bottom_stage(512, 256, 512)
