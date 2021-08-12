@@ -7,10 +7,10 @@
 ## Overall Architecture
 ![](figure/HANUN.png)
 ## Pyramid Pooling Encoder
-![](figure/PP encoder.png)
+![](figure/PP_encoder.png)
 ## Attention Nested U-Net Decoder
-![](figure/ANU decoder.png)
+![](figure/ANU_decoder.png)
 ## Results
 ![](figure/demo.png)
 ## P-R Curve on CUHK dataset
-![](figure/CUHK PR Curve.png)
+![](figure/CUHK_PR_Curve.png)
