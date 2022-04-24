@@ -7,18 +7,18 @@
 With the popularity of image sensors in various mobile devices, image blurring caused by hand shaking or out of focus becomes ubiquitous, which deteriorates image quality and poses challenges for vision tasks, including object detection, image classification and image segmentation. Designing an efficient blur detection algorithm which can automatically detect and locate blurred regions becomes necessary. In this letter, we design an end-to-end convolution neural network called heterogeneous at- tention nested U-shaped network (HANUN) for blur detection. We introduce pyramid pooling into encoders to enhance the feature ex- traction at different scales and reduce the gradual information loss. Inspired by the nested network design, small U-shaped networks are embedded into our decoders to increase the network depth and promote feature fusion with different receptive field scales. In addition, we incorporate a channel attention mechanism in the proposed network to highlight the informative features for detect- ing the blurry regions. Experimental results show that HANUN outperforms other state-of-the-art algorithms for blur detection tasks on public datasets and real-world images.
 
 ## Overall Architecture
-![](figure/HANUN.png)
+![](figures/HANUN.png)
 
 ## Demo
-![](figure/demo.png)
+![](figures/demo.png)
 
 ## Experimental Results
 
 1. Precision-Recall curve
-![](figure/CUHK_PR_Curve.png)
+![](figures/CUHK_PR_Curve.png)
 
 2. Comparsion with SOTA networks.
-![](figure/comparsion.png)
+![](figures/comparsion.png)
 
 3. Ablation study.
-![](figure/ablation.png)
+![](figures/ablation.png)
